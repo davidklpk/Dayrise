@@ -144,7 +144,7 @@ void loop()
     // ... mit der Hintergrundfarbe weiß...
     Paint_Clear(WHITE);
     // ... und dem Text folgenden Text beschrieben:
-    Paint_DrawString_EN((EPD_3IN52_HEIGHT/2)-72, getHorizontalCenter(24), timeHourMinuteSecond, &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(26, getHorizontalCenter(67), timeHourMinuteSecond, &FontRoboto48, WHITE, BLACK);
     // ... und dem Indikator, je nach dem ob der Alarm aktiviert ist oder nicht
     isActiveAlarm(true);
     // und hier wird das Bild dann auf das Display geladen und dargestellt
