@@ -8,12 +8,12 @@
 #include <TimeLib.h>
 
 // Wifi Credentials
-const char* ssid     = "Internet 🚀";
-const char* password = "keinkreativesPasswort123";
+const char* ssid     = "Galaxy S20";
+const char* password = "rcrv7556";
 
 // NTP Server und Zeit
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 0;
+const char* ntpServer = "0.de.pool.ntp.org";
+const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
 struct tm timeinfo;
 char timeHourMinuteSecond[50]; 
@@ -54,6 +54,17 @@ int getHorizontalCenter(int fontSize) {
     return (EPD_3IN52_WIDTH/2)-(fontSize/2);
 }
 
+/**
+ * @brief Get the Vertical Center object
+ * 
+ * @param fontHeight Die Höhe des Fonts (siehe in /fonts Ordner, dort ist diese Konfiguriert)
+ * @param letters Anzahl der Biuchstaben
+ * @return int 
+ */
+int getVerticalCenter(int fontHeight, int letters) {
+    return (EPD_3IN52_WIDTH/2)-((fontHeight*letters)/2);
+}
+
 void displaySplashScreen() {
     Paint_NewImage(BlackImage, EPD_3IN52_WIDTH, EPD_3IN52_HEIGHT, 270, WHITE);
     Paint_Clear(WHITE);
@@ -71,12 +82,12 @@ void displaySplashScreen() {
  */
 void isActiveAlarm(boolean isActive) {
     if(isActive) {
-        Paint_DrawCircle(20, 20, 3, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+        Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
         //Paint_DrawImage(indicator_no_alarm, 20, 20, 25, 25);                  // TODO: Icon einfügen funktioniert nicht so ganz idk warum
-        Paint_DrawString_EN(31, 14, "in 8:21 hours", &Font12, WHITE, BLACK);
+        Paint_DrawString_EN(48, 14, "in 8:21 hours", &FontRoboto13, WHITE, BLACK);
     } else {
-        Paint_DrawCircle(20, 20, 3, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
-        Paint_DrawString_EN(31, 14, "no alarm", &Font12, WHITE, BLACK);
+        Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
+        Paint_DrawString_EN(48, 14, "no alarm", &FontRoboto13, WHITE, BLACK);
     }
 }
 
@@ -136,7 +147,7 @@ void loop()
     }
     
     // mögliches Format: "%A, %B %d %Y %H:%M:%S"
-    strftime(timeHourMinuteSecond, sizeof(timeHourMinuteSecond), "%H:%M:%S", &timeinfo);
+    strftime(timeHourMinuteSecond, sizeof(timeHourMinuteSecond), "%H:%M", &timeinfo);
     String asString(timeHourMinuteSecond);
     
     // Hier wird das neue Bild erstellt...
@@ -144,7 +155,7 @@ void loop()
     // ... mit der Hintergrundfarbe weiß...
     Paint_Clear(WHITE);
     // ... und dem Text folgenden Text beschrieben:
-    Paint_DrawString_EN(26, getHorizontalCenter(67), timeHourMinuteSecond, &FontRoboto48, WHITE, BLACK);
+    Paint_DrawString_EN(35, getHorizontalCenter(80), timeHourMinuteSecond, &FontRoboto72, WHITE, BLACK);
     // ... und dem Indikator, je nach dem ob der Alarm aktiviert ist oder nicht
     isActiveAlarm(true);
     // und hier wird das Bild dann auf das Display geladen und dargestellt

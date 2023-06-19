@@ -3,7 +3,7 @@
 
 // Muss so groß sein wie der größte character von allen Fonts
 #define MAX_HEIGHT_FONT         67//41
-#define MAX_WIDTH_FONT          38//32
+#define MAX_WIDTH_FONT          58//38//32
 #define OFFSET_BITMAP           335//54
 // #define MAX_HEIGHT_FONT         76
 // #define MAX_WIDTH_FONT          39
@@ -42,14 +42,15 @@ typedef struct
 }cFONT;
 
 extern sFONT FontRoboto48;
+extern sFONT FontRoboto72;
+extern sFONT FontRoboto13;
+
 extern sFONT Font24;
 extern sFONT Font20;
 extern sFONT Font16;
 extern sFONT Font12;
 extern sFONT Font8;
 
-extern cFONT Font12CN;
-extern cFONT Font24CN;
 // extern const unsigned char Font16_Table[];
 
 #ifdef __cplusplus
