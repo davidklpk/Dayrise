@@ -3,20 +3,10 @@
 #include "GUI_Paint.h"
 #include "imagedata.h"
 #include <stdlib.h>
-#include <WiFi.h>
-#include "time.h"
-#include <TimeLib.h>
+#include <HardwareSerial.h>
 
-// Wifi Credentials
-const char* ssid     = "Galaxy S20";
-const char* password = "rcrv7556";
-
-// NTP Server und Zeit
-const char* ntpServer = "0.de.pool.ntp.org";
-const long  gmtOffset_sec = 3600;
-const int   daylightOffset_sec = 3600;
-struct tm timeinfo;
-char timeHourMinuteSecond[50]; 
+// UART2 für serielle Kommunikation (das ist der Slave)
+HardwareSerial SerialPort(2); 
 
 // Der Schwarz-Weiß-Bildspeicher
 UBYTE *BlackImage;
@@ -80,7 +70,7 @@ void displaySplashScreen() {
  * 
  * @param isActive true = Alarm aktiv, false = Alarm nicht aktiv
  */
-void isActiveAlarm(boolean isActive) {
+void setActiveAlarm(boolean isActive) {
     if(isActive) {
         Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
         //Paint_DrawImage(indicator_no_alarm, 20, 20, 25, 25);                  // TODO: Icon einfügen funktioniert nicht so ganz idk warum
@@ -89,6 +79,10 @@ void isActiveAlarm(boolean isActive) {
         Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
         Paint_DrawString_EN(48, 14, "no alarm", &FontRoboto13, WHITE, BLACK);
     }
+}
+
+void printAlarmTimeTitle(char *title) {
+    Paint_DrawString_EN(35, 22, title, &FontRoboto13, WHITE, BLACK);
 }
 
 /**
@@ -110,15 +104,76 @@ void setDisplayToSleep() {
     printf("5V wird geschlossen und Stromversorgung auf 0 gesetzt\r\n");
 }
 
+/**
+ * @brief Get the Value object
+ * 
+ * https://arduino.stackexchange.com/questions/1013/how-do-i-split-an-incoming-string
+ * 
+ * @param data 
+ * @param separator 
+ * @param index 
+ * @return String 
+ */
+String getValue(String data, char separator, int index)
+{
+    int found = 0;
+    int strIndex[] = { 0, -1 };
+    int maxIndex = data.length() - 1;
+
+    for (int i = 0; i <= maxIndex && found <= index; i++) {
+        if (data.charAt(i) == separator || i == maxIndex) {
+            found++;
+            strIndex[0] = strIndex[1] + 1;
+            strIndex[1] = (i == maxIndex) ? i+1 : i;
+        }
+    }
+    return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
+}
+
+void printTime(String currentTime, String alarmTime) {
+    Paint_DrawString_EN(35, getHorizontalCenter(80), currentTime.c_str(), &FontRoboto72, WHITE, BLACK);
+    //TODO: Verbleibende Zeit
+}
+
+
+/**
+ * @brief Erhält Daten vom Master, die mit "|" getrennt sind. Als erstes kommt der Control-Bit, dann die Daten.
+ * 
+ * 0 = Aktuelle Uhrzeit (Format: 0|hh:mm|?hh:mm)
+ * 1 = Weckzeit einstellen (Format: 1|hh:mm|0||1)  
+ * 2 = Error Handling (Format: 2|hh:mm|0||1) 
+ * 
+ */
+void receiveControlBits()
+{
+    if (SerialPort.available())
+    {
+        String msg = SerialPort.readString();
+        String bit = getValue(msg, '|', 0);
+
+        Serial.print("Received: ");
+        Serial.println(bit);
+
+        if (bit == "0")
+        {
+            printTime(getValue(msg, '|', 1), "00:00");
+        }
+        else if (bit == "1")
+        {
+        }
+        else if (bit == "2")
+        {
+        }
+        else if (bit == "3")
+        {
+        }
+    }
+}
+
 void setup() {
     // Wifi connection
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-    }
-    
-    // Initialisierung der Zeit
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    Serial.begin(115200);
+    SerialPort.begin(15200, SERIAL_8N1, 16, 17);
 
     // ESP32 und EPD werden initialisiert
     DEV_Module_Init();
@@ -139,25 +194,17 @@ void setup() {
 }
 
 void loop()
-{
-    // Zeit wird aktualisiert
-    if(!getLocalTime(&timeinfo)){
-        Serial.println("Failed to obtain time");
-        return;
-    }
-    
-    // mögliches Format: "%A, %B %d %Y %H:%M:%S"
-    strftime(timeHourMinuteSecond, sizeof(timeHourMinuteSecond), "%H:%M", &timeinfo);
-    String asString(timeHourMinuteSecond);
-    
+{   
     // Hier wird das neue Bild erstellt...
     Paint_NewImage(BlackImage, EPD_3IN52_WIDTH, EPD_3IN52_HEIGHT, 270, WHITE);
     // ... mit der Hintergrundfarbe weiß...
     Paint_Clear(WHITE);
     // ... und dem Text folgenden Text beschrieben:
-    Paint_DrawString_EN(35, getHorizontalCenter(80), timeHourMinuteSecond, &FontRoboto72, WHITE, BLACK);
+    receiveControlBits();
+    //!!!!!!!!!!!!!!Paint_DrawString_EN(35, getHorizontalCenter(80), timeHourMinuteSecond, &FontRoboto72, WHITE, BLACK);
     // ... und dem Indikator, je nach dem ob der Alarm aktiviert ist oder nicht
-    isActiveAlarm(true);
+    //setActiveAlarm(true);
+    //printAlarmTimeTitle("Set alarm by using the .");
     // und hier wird das Bild dann auf das Display geladen und dargestellt
     EPD_3IN52_display(BlackImage);
    
