@@ -1,15 +1,21 @@
 #include "DEV_Config.h"
 #include "EPD.h"
 #include "GUI_Paint.h"
-#include "imagedata.h"
+#include "images/imagedata.h"
 #include <stdlib.h>
 #include <HardwareSerial.h>
 
-// UART2 für serielle Kommunikation (das ist der Slave)
+// UART2 für serielle Kommunikation (dieser Code ist für den Slave)
 HardwareSerial SerialPort(2); 
 
 // Der Schwarz-Weiß-Bildspeicher
 UBYTE *BlackImage;
+
+// Die Daten, die vom Master gesendet werden
+String dummy;
+String controlBit;
+String secondParam;
+String thirdParam;
 
 /**
  * @brief Vollständiges Refreshen des Displays.
@@ -17,7 +23,7 @@ UBYTE *BlackImage;
  * Kann daher nicht bei schnellen Änderungen auf dem Display verwendet werden.
  */
 void fullRefresh() {
-    printf("Display wird vollständig refresht. Flackern möglich.\r\n");
+    printf("Display wird vollständig refresht.\r\n");
     //EPD_3IN52_display_NUM(EPD_3IN52_WHITE);
     EPD_3IN52_lut_GC();
     EPD_3IN52_refresh();
@@ -29,7 +35,7 @@ void fullRefresh() {
  * Kann daher bei schnellen Änderungen auf dem Display verwendet werden.
  */
 void quickRefresh() {
-    printf("Display wird schnell refresht. Flackern ausgeschlossen.\r\n");
+    printf("Display wird schnell refresht.\r\n");
     EPD_3IN52_lut_DU();
     EPD_3IN52_refresh();
 }
@@ -66,23 +72,20 @@ void displaySplashScreen() {
 }
 
 /**
- * @brief Zeigt Indikator auf Display an, ob ein Alarm aktiv ist oder nicht.
+ * @brief Zeigt Indikator und verbleibende Zeit auf Display an, ob ein Alarm aktiv ist oder nicht.
+ * Der Indikator ist ein ausgefüllter Kreis (aktiv) oder nur die Kontur eines Kreises (nicht aktiv).
  * 
  * @param isActive true = Alarm aktiv, false = Alarm nicht aktiv
  */
-void setActiveAlarm(boolean isActive) {
+void setActiveAlarm(boolean isActive, String timeRemaining) {
     if(isActive) {
         Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
         //Paint_DrawImage(indicator_no_alarm, 20, 20, 25, 25);                  // TODO: Icon einfügen funktioniert nicht so ganz idk warum
-        Paint_DrawString_EN(48, 14, "in 8:21 hours", &FontRoboto13, WHITE, BLACK);
+        Paint_DrawString_EN(48, 14, timeRemaining.c_str(), &FontRoboto13, WHITE, BLACK);
     } else {
         Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
-        Paint_DrawString_EN(48, 14, "no alarm", &FontRoboto13, WHITE, BLACK);
+        Paint_DrawString_EN(48, 14, "No alarm", &FontRoboto13, WHITE, BLACK);
     }
-}
-
-void printAlarmTimeTitle(char *title) {
-    Paint_DrawString_EN(35, 22, title, &FontRoboto13, WHITE, BLACK);
 }
 
 /**
@@ -105,17 +108,16 @@ void setDisplayToSleep() {
 }
 
 /**
- * @brief Get the Value object
+ * @brief Gitb den Parameter an der angegebenen Stelle zurück von den 
+ * Daten die mit "|" getrennt sind.
  * 
- * https://arduino.stackexchange.com/questions/1013/how-do-i-split-an-incoming-string
- * 
- * @param data 
- * @param separator 
- * @param index 
+ * @param data Der gesendete String 
+ * @param index An welcher Stelle nach dem | soll der Parameter zurückgegeben werden
  * @return String 
  */
-String getValue(String data, char separator, int index)
+String getParam(String data, int index)
 {
+    char separator = '|';
     int found = 0;
     int strIndex[] = { 0, -1 };
     int maxIndex = data.length() - 1;
@@ -130,44 +132,74 @@ String getValue(String data, char separator, int index)
     return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
 }
 
-void printTime(String currentTime, String alarmTime) {
+/**
+ * @brief Zeigt die aktuelle Uhrzeit auf dem Display an.
+ * 
+ * @param currentTime Die gesendet Uhrzeit vom Master
+ * @param alarmTime Die gesendete Alarmzeit vom Master
+ */
+void printTimeScreen(String currentTime, String alarmTime) {
+    if(alarmTime != "-") {
+        setActiveAlarm(true, alarmTime);
+    } else {
+        setActiveAlarm(false, alarmTime);
+    }
     Paint_DrawString_EN(35, getHorizontalCenter(80), currentTime.c_str(), &FontRoboto72, WHITE, BLACK);
-    //TODO: Verbleibende Zeit
 }
 
+/**
+ * @brief Zeigt die Weckzeiteinstellug auf dem Display an.
+ * 
+ * @param alarmTime Die gesendete Alarmzeit vom Master
+ * @param alarmState Der gesendete Alarmstatus vom Master (0 = in Bearbeitung, 1 = abgeschlossen)
+ */
+void printAlarmScreen(String alarmTime, String alarmState) {
+
+    if(alarmState == "0") {
+        Paint_DrawString_EN(35, 22, "Set alarm", &FontRoboto13, WHITE, BLACK);
+        Paint_DrawString_EN(35, getHorizontalCenter(80), alarmTime.c_str(), &FontRoboto72, WHITE, BLACK);
+    } else if(alarmState == "1") {
+        String time = "Successfully set at " + alarmTime;
+        Paint_DrawString_EN(35, getHorizontalCenter(80), time.c_str(), &FontRoboto13, WHITE, BLACK);
+        delay(1000);
+    }
+}
 
 /**
  * @brief Erhält Daten vom Master, die mit "|" getrennt sind. Als erstes kommt der Control-Bit, dann die Daten.
  * 
  * 0 = Aktuelle Uhrzeit (Format: 0|hh:mm|?hh:mm)
  * 1 = Weckzeit einstellen (Format: 1|hh:mm|0||1)  
- * 2 = Error Handling (Format: 2|hh:mm|0||1) 
- * 
+ * 2 = Error Handling (Format: 2|String) 
  */
 void receiveControlBits()
 {
-    if (SerialPort.available())
-    {
-        String msg = SerialPort.readString();
-        String bit = getValue(msg, '|', 0);
+    // if (SerialPort.available())
+    // {
+        dummy = "1|07:30|1"; //"0|12:34|7:24";
+        // String msg = SerialPort.readString();
+
+        String msg = dummy;
+ 
+        controlBit = getParam(msg, 0);
+        secondParam = getParam(msg, 1);
+        thirdParam = getParam(msg, 2);
 
         Serial.print("Received: ");
-        Serial.println(bit);
+        Serial.println(controlBit);
 
-        if (bit == "0")
-        {
-            printTime(getValue(msg, '|', 1), "00:00");
+        if (controlBit == "0") {
+            printTimeScreen(secondParam, thirdParam);
         }
-        else if (bit == "1")
-        {
+        else if (controlBit == "1") {
+            printAlarmScreen(secondParam, thirdParam);
         }
-        else if (bit == "2")
-        {
+        else if (controlBit == "2") {
+            //TODO: Error Messages
+        } else if(controlBit == "3") {
+            //TODO: Switch between Online/Offline mode
         }
-        else if (bit == "3")
-        {
-        }
-    }
+    // }
 }
 
 void setup() {
@@ -190,23 +222,22 @@ void setup() {
     }
 
     displaySplashScreen();
-    //setDisplayToSleep();
 }
 
 void loop()
 {   
     // Hier wird das neue Bild erstellt...
     Paint_NewImage(BlackImage, EPD_3IN52_WIDTH, EPD_3IN52_HEIGHT, 270, WHITE);
+
     // ... mit der Hintergrundfarbe weiß...
     Paint_Clear(WHITE);
-    // ... und dem Text folgenden Text beschrieben:
+
+    // ... und dem Inhalt von der Funktion receiveControlBits()...
     receiveControlBits();
-    //!!!!!!!!!!!!!!Paint_DrawString_EN(35, getHorizontalCenter(80), timeHourMinuteSecond, &FontRoboto72, WHITE, BLACK);
-    // ... und dem Indikator, je nach dem ob der Alarm aktiviert ist oder nicht
-    //setActiveAlarm(true);
-    //printAlarmTimeTitle("Set alarm by using the .");
-    // und hier wird das Bild dann auf das Display geladen und dargestellt
+
+    // ... und hier wird das Bild dann auf das Display geladen und dargestellt
     EPD_3IN52_display(BlackImage);
    
+    // Refresht das Display um auf Änderungen zu reagieren
     quickRefresh();
 }
