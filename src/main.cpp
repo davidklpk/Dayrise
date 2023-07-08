@@ -4,6 +4,7 @@
 #include "images/imagedata.h"
 #include <stdlib.h>
 #include <HardwareSerial.h>
+#include "TickTwo.h"
 
 // UART2 für serielle Kommunikation (dieser Code ist für den Slave)
 HardwareSerial SerialPort(2); 
@@ -12,7 +13,7 @@ HardwareSerial SerialPort(2);
 UBYTE *BlackImage;
 
 // Die Daten, die vom Master gesendet werden
-String dummy;
+String msg;
 String controlBit;
 String secondParam;
 String thirdParam;
@@ -23,7 +24,7 @@ String thirdParam;
  * Kann daher nicht bei schnellen Änderungen auf dem Display verwendet werden.
  */
 void fullRefresh() {
-    printf("Display wird vollständig refresht.\r\n");
+    //printf("Display wird vollständig refresht.\r\n");
     //EPD_3IN52_display_NUM(EPD_3IN52_WHITE);
     EPD_3IN52_lut_GC();
     EPD_3IN52_refresh();
@@ -35,7 +36,7 @@ void fullRefresh() {
  * Kann daher bei schnellen Änderungen auf dem Display verwendet werden.
  */
 void quickRefresh() {
-    printf("Display wird schnell refresht.\r\n");
+    //printf("Display wird schnell refresht.\r\n");
     EPD_3IN52_lut_DU();
     EPD_3IN52_refresh();
 }
@@ -80,7 +81,6 @@ void displaySplashScreen() {
 void setActiveAlarm(boolean isActive, String timeRemaining) {
     if(isActive) {
         Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-        //Paint_DrawImage(indicator_no_alarm, 20, 20, 25, 25);                  // TODO: Icon einfügen funktioniert nicht so ganz idk warum
         Paint_DrawString_EN(48, 14, timeRemaining.c_str(), &FontRoboto13, WHITE, BLACK);
     } else {
         Paint_DrawCircle(35, 22, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
@@ -139,6 +139,9 @@ String getParam(String data, int index)
  * @param alarmTime Die gesendete Alarmzeit vom Master
  */
 void printTimeScreen(String currentTime, String alarmTime) {
+
+    Serial.println("printTime with time: " + currentTime + " and alarmTime: " + alarmTime);
+
     if(alarmTime != "-") {
         setActiveAlarm(true, alarmTime);
     } else {
@@ -153,15 +156,19 @@ void printTimeScreen(String currentTime, String alarmTime) {
  * @param alarmTime Die gesendete Alarmzeit vom Master
  * @param alarmState Der gesendete Alarmstatus vom Master (0 = in Bearbeitung, 1 = abgeschlossen)
  */
-void printAlarmScreen(String alarmTime, String alarmState) {
+void printAlarmScreen(String alarmTime, boolean alarmState) {
 
-    if(alarmState == "0") {
+    Serial.println("printAlarm with time: " + alarmTime + " and state: " + alarmState);
+
+    if(alarmState) {
+        Serial.println("AlarmState gesetzt");   
         Paint_DrawString_EN(35, 22, "Set alarm", &FontRoboto13, WHITE, BLACK);
         Paint_DrawString_EN(35, getHorizontalCenter(80), alarmTime.c_str(), &FontRoboto72, WHITE, BLACK);
-    } else if(alarmState == "1") {
-        String time = "Successfully set at " + alarmTime;
-        Paint_DrawString_EN(35, getHorizontalCenter(80), time.c_str(), &FontRoboto13, WHITE, BLACK);
-        delay(1000);
+    // } else if(!alarmState) {
+    //     String time = "Successfully set at " + alarmTime;
+    //     Serial.println("STATE 1");
+    //     Paint_DrawString_EN(35, getHorizontalCenter(80), time.c_str(), &FontRoboto13, WHITE, BLACK);
+    //     delay(1000);
     }
 }
 
@@ -170,42 +177,34 @@ void printAlarmScreen(String alarmTime, String alarmState) {
  * 
  * 0 = Aktuelle Uhrzeit (Format: 0|hh:mm|?hh:mm)
  * 1 = Weckzeit einstellen (Format: 1|hh:mm|0||1)  
- * 2 = Error Handling (Format: 2|String) 
  */
 void receiveControlBits()
 {
-    // if (SerialPort.available())
-    // {
-        dummy = "1|07:30|1"; //"0|12:34|7:24";
-        // String msg = SerialPort.readString();
+    if (SerialPort.available()) {
+        msg = SerialPort.readStringUntil('\n');
 
-        String msg = dummy;
- 
+
+        msg.remove(msg.length()-1, 1);
         controlBit = getParam(msg, 0);
         secondParam = getParam(msg, 1);
         thirdParam = getParam(msg, 2);
 
-        Serial.print("Received: ");
-        Serial.println(controlBit);
-
-        if (controlBit == "0") {
-            printTimeScreen(secondParam, thirdParam);
-        }
-        else if (controlBit == "1") {
-            printAlarmScreen(secondParam, thirdParam);
-        }
-        else if (controlBit == "2") {
-            //TODO: Error Messages
-        } else if(controlBit == "3") {
-            //TODO: Switch between Online/Offline mode
-        }
-    // }
+        Serial.print("AVAILBABLE Received: " + msg);
+    }
+    
+    if (controlBit == "0") {
+        printTimeScreen(secondParam, thirdParam);
+    }
+    else if (controlBit == "1") {
+        printAlarmScreen(secondParam, true);
+    }
 }
 
 void setup() {
     // Wifi connection
     Serial.begin(115200);
-    SerialPort.begin(15200, SERIAL_8N1, 16, 17);
+    SerialPort.begin(115200, SERIAL_8N1, 16, 17);
+    //tickerObject.start(); 
 
     // ESP32 und EPD werden initialisiert
     DEV_Module_Init();

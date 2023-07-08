@@ -238,13 +238,13 @@ parameter:
 ******************************************************************************/
 void EPD_3IN52_ReadBusy(void)
 {
-    Debug("e-Paper busy\r\n");
+    //Debug("e-Paper busy\r\n");
     UBYTE busy;
     do {
         busy = DEV_Digital_Read(EPD_BUSY_PIN);
     } while(!busy);
     DEV_Delay_ms(200);
-    Debug("e-Paper busy release\r\n");
+    //Debug("e-Paper busy release\r\n");
 }
 
 /**
